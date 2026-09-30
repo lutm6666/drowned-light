@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}</style>
+</head>
+<body>
+<title>溺光</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: one centred column. Masthead, then the game stage with its overlays, then a controls strip.
+   One committed dark look: the page is the inside of a lighthouse at night. */
+:root{
+  color-scheme:dark;
+  --abyss:#060d0d; --deep:#0d1a1a; --kelp:#1b3633; --fog:#93aaa3; --bone:#e6e1cf;
+  --lantern:#eaa53a; --blood:#c0473c; --eldritch:#9163d6; --tide:#3fb7a6;
+  --f-display:'Noto Serif TC','Songti TC','PMingLiU',serif;
+  --f-body:'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif;
+}
+[hidden]{display:none!important}
+html,body{background:var(--abyss);color:var(--bone)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.7;padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:980px;margin-inline:auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:900;font-size:clamp(30px,6vw,46px);letter-spacing:.18em;margin:0;color:var(--lantern);text-shadow:0 0 28px rgba(234,165,58,.35)}
+header p{margin:0;color:var(--fog);font-size:13px;letter-spacing:.08em}
+
+.hud{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px 14px;align-items:center;font-size:12px;color:var(--fog)}
+.bar{display:flex;flex-direction:column;gap:3px;min-width:0}
+.bar span{letter-spacing:.12em;display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}
+.track{height:9px;background:var(--deep);border:1px solid var(--kelp);position:relative;overflow:hidden}
+.fill{position:absolute;inset:0;transform-origin:left;transition:transform .12s linear}
+#fHp{background:var(--blood)} #fSt{background:var(--tide)} #fSa{background:var(--eldritch)}
+.stat{display:flex;gap:14px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--bone)}
+.stat b{color:var(--lantern);font-weight:700}
+@media (max-width:620px){.hud{grid-template-columns:repeat(3,minmax(0,1fr))}.stat{grid-column:1/-1}}
+
+.stage{position:relative;border:1px solid var(--kelp);background:#000;aspect-ratio:16/10;width:min(100%,max(280px,calc((100dvh - 210px)*1.6)));margin-inline:auto;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;height:100%}
+#floorName{position:absolute;left:12px;top:8px;font-family:var(--f-display);font-size:14px;letter-spacing:.2em;color:var(--fog);pointer-events:none}
+#prompt{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);background:rgba(6,13,13,.85);border:1px solid var(--lantern);color:var(--bone);padding:4px 14px;font-size:13px;letter-spacing:.08em;pointer-events:none;white-space:nowrap}
+#toast{position:absolute;left:50%;top:16%;transform:translateX(-50%);font-family:var(--f-display);font-size:clamp(14px,2.6vw,20px);letter-spacing:.2em;color:var(--bone);text-shadow:0 0 12px #000,0 0 4px #000;pointer-events:none;text-align:center;opacity:0;transition:opacity .4s}
+#toast.on{opacity:1}
+
+.ov{position:absolute;inset:0;background:rgba(4,9,9,.93);display:flex;overflow-y:auto;padding:clamp(12px,3vw,28px)}
+.panel{margin:auto;width:min(680px,100%);display:flex;flex-direction:column;gap:12px}
+.panel h2{font-family:var(--f-display);font-weight:900;font-size:clamp(22px,4.4vw,32px);letter-spacing:.2em;margin:0;color:var(--lantern);text-wrap:balance}
+.panel h3{font-family:var(--f-display);font-size:14px;letter-spacing:.2em;color:var(--fog);margin:6px 0 0;font-weight:500;border-bottom:1px solid var(--kelp);padding-bottom:4px}
+.panel p{margin:0;color:var(--bone);max-width:34em}
+.panel p.dim{color:var(--fog);font-size:13px}
+.panel p.page{font-family:var(--f-display);line-height:2;white-space:pre-line;border-left:2px solid var(--eldritch);padding-left:14px}
+.rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+button{font:inherit;color:var(--bone);background:var(--deep);border:1px solid var(--kelp);padding:8px 12px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+button small{color:var(--fog);font-size:12px;line-height:1.5}
+button b{font-weight:700;letter-spacing:.06em}
+button:hover:not(:disabled),button:focus-visible{border-color:var(--lantern);outline:none;background:var(--kelp)}
+button:disabled{opacity:.42;cursor:default}
+button.go{background:var(--lantern);color:#1a1204;border-color:var(--lantern);font-family:var(--f-display);font-weight:900;font-size:17px;letter-spacing:.3em;text-align:center;align-items:center;padding:12px}
+button.go:hover,button.go:focus-visible{background:#ffc25e}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags button{flex-direction:row;padding:4px 10px;font-size:13px}
+
+.pad{position:absolute;right:10px;bottom:10px;display:grid;grid-template-columns:repeat(3,54px);gap:8px}
+.pad button{width:54px;height:54px;border-radius:50%;align-items:center;justify-content:center;text-align:center;background:rgba(13,26,26,.7);font-size:14px;padding:0}
+.pad button:active{background:var(--kelp);border-color:var(--lantern)}
+#stick{position:absolute;width:96px;height:96px;border-radius:50%;border:1px solid var(--fog);opacity:.5;pointer-events:none}
+#stick i{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px;border-radius:50%;background:var(--fog)}
+
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px 18px;font-size:13px;color:var(--fog);margin:0;padding:0;list-style:none}
+.keys kbd{font-family:inherit;color:var(--bone);border:1px solid var(--kelp);padding:0 6px;margin-right:6px;background:var(--deep)}
+@media (prefers-reduced-motion:reduce){.fill,#toast{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>溺光</h1>
+    <p>霧港燈塔的光熄了。提著最後一盞燈，往下走。</p>
+  </header>
+
+  <div class="hud" aria-live="off">
+    <div class="bar"><span>生命 <i id="tHp">100</i></span><div class="track"><div class="fill" id="fHp"></div></div></div>
+    <div class="bar"><span>體力 <i id="tSt">100</i></span><div class="track"><div class="fill" id="fSt"></div></div></div>
+    <div class="bar"><span>理智 <i id="tSa">100</i></span><div class="track"><div class="fill" id="fSa"></div></div></div>
+    <div class="stat"><span>燈油 <b id="tFl">2</b></span><span>迴響 <b id="tEc">0</b></span></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="cv" width="960" height="600"></canvas>
+    <div id="floorName"></div>
+    <div id="toast"></div>
+    <div id="prompt" hidden></div>
+    <div id="stick" hidden><i></i></div>
+    <div class="pad" id="pad" hidden>
+      <button type="button" data-k="heal">燈油</button><button type="button" data-k="use">調查</button><button type="button" data-k="heavy">重擊</button>
+      <span></span><button type="button" data-k="roll">翻滾</button><button type="button" data-k="light">攻擊</button>
+    </div>
+    <div class="ov" id="ov"></div>
+  </div>
+
+  <ul class="keys">
+    <li><kbd>W A S D</kbd>移動</li>
+    <li><kbd>滑鼠左鍵</kbd>/<kbd>J</kbd>輕攻擊</li>
+    <li><kbd>滑鼠右鍵</kbd>/<kbd>K</kbd>重攻擊</li>
+    <li><kbd>空白鍵</kbd>翻滾，有無敵時間</li>
+    <li><kbd>Q</kbd>喝燈油回血</li>
+    <li><kbd>E</kbd>調查</li>
+  </ul>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), g = cv.getContext('2d');
+const W = 960, H = 600, T = 32, MW = 56, MH = 42;
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const ri = (a, b) => Math.floor(rnd(a, b + 1));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return Math.abs(d); };
+
+/* ---------- 存檔：只存跨輪次的進度 ---------- */
+const SAVE = 'drowned-light.v1';
+const blankMeta = () => ({ echoes: 0, up: { vit: 0, end: 0, flask: 0, blade: 0, will: 0 }, pages: 0, remnant: null, runs: 0, wins: 0, deepest: 0 });
+function loadMeta() { try { const s = JSON.parse(localStorage.getItem(SAVE)); if (s && s.up) return Object.assign(blankMeta(), s); } catch (e) {} return blankMeta(); }
+function saveMeta() { try { localStorage.setItem(SAVE, JSON.stringify(meta)); } catch (e) {} }
+let meta = loadMeta();
+
+/* ---------- 文本 ---------- */
+const FLOORS = ['霧港街巷', '淹沒的禮拜堂', '燈塔地窖', '潮母之淵'];
+const PAGES = [
+  '守燈日誌・其一\n\n霧又上來了。今晚點燈時，海面下有東西跟著光轉。\n我告訴自己那是魚群。魚群不會停在同一個地方，整夜抬頭看。',
+  '守燈日誌・其二\n\n鎮上的人開始往海裡走。他們說聽見有人叫自己的名字。\n神父把禮拜堂的長椅拆了，在地上刻記號。他說這些記號清醒的人看不見，這樣才安全。',
+  '守燈日誌・其三\n\n我下到地窖，想找前任守燈人留下的東西。\n牆上有他的字：「光不是用來照船的。」\n後面的字被水泡爛了，只剩一句：「牠靠光認路。」',
+  '守燈日誌・其四\n\n我試著三天不點燈。第三天夜裡，燈自己亮了。\n點燈的人提著一盞和我一樣的燈，穿著和我一樣的外套。他沒有回頭。',
+  '守燈日誌・其五\n\n我數過地窖裡的外套，一共十一件，尺寸都一樣。\n每一件的口袋裡都有一本日誌。每一本的第一頁，都寫著「霧又上來了」。',
+  '守燈日誌・其六\n\n下一個提燈下來的人，如果你讀到這裡：\n殺了牠沒有用。牠死的時候，燈會需要新的燈芯。\n你可以把燈熄掉。我沒有這個勇氣，所以你才會在這裡。'
+];
+const RELICS = [
+  { id: 'anchor', n: '鏽蝕的船錨', d: '重攻擊傷害提高 50%' },
+  { id: 'cloak', n: '守燈人的外套', d: '翻滾消耗的體力減少 40%' },
+  { id: 'lung', n: '溺者之肺', d: '生命上限 +30，並立刻回復' },
+  { id: 'eye', n: '第三隻眼', d: '任何理智下都看得見隱藏記號，但理智流失加快 50%' },
+  { id: 'blood', n: '黑潮之血', d: '理智低於一半時，傷害提高 30%' },
+  { id: 'oil', n: '鯨脂燈油', d: '燈油 +1，每次多回復 20 生命' },
+  { id: 'bell', n: '靜默之鈴', d: '擊殺幻影得到的迴響變成三倍' },
+  { id: 'salt', n: '鹽晶護符', d: '理智流失減少 40%' },
+  { id: 'blade', n: '獵潮者之刃', d: '輕攻擊傷害提高 20%，每次擊殺回復 4 生命' },
+  { id: 'shell', n: '迴響之殼', d: '得到的迴響增加 30%' }
+];
+const UPS = [
+  { id: 'vit', n: '體魄', d: '生命上限 +15', max: 8, cost: l => 30 + l * 30 },
+  { id: 'end', n: '耐力', d: '體力上限 +12', max: 6, cost: l => 30 + l * 30 },
+  { id: 'blade', n: '磨刃', d: '傷害 +10%', max: 8, cost: l => 40 + l * 35 },
+  { id: 'will', n: '意志', d: '理智上限 +15', max: 5, cost: l => 30 + l * 25 },
+  { id: 'flask', n: '燈油瓶', d: '燈油 +1', max: 3, cost: l => 90 + l * 90 }
+];
+
+/* ---------- 輸入 ---------- */
+const keys = {}, press = {};
+let mouse = { x: W / 2, y: H / 2, used: false };
+const MAP = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyJ: 'light', KeyK: 'heavy', Space: 'roll', KeyQ: 'heal', KeyR: 'heal', KeyE: 'use', KeyF: 'use' };
+addEventListener('keydown', e => {
+  const k = MAP[e.code]; if (!k) return;
+  if (state === 'play') e.preventDefault();
+  if (!keys[k]) press[k] = true; keys[k] = true;
+});
+addEventListener('keyup', e => { const k = MAP[e.code]; if (k) keys[k] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+const stage = $('#stage');
+function toCanvas(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
+cv.addEventListener('mousemove', e => { const p = toCanvas(e); mouse.x = p.x; mouse.y = p.y; mouse.used = true; });
+cv.addEventListener('mousedown', e => { if (state !== 'play') return; e.preventDefault(); const p = toCanvas(e); mouse.x = p.x; mouse.y = p.y; mouse.used = true; press[e.button === 2 ? 'heavy' : 'light'] = true; });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+/* 觸控：左半邊拖曳是搖桿，右下是按鈕 */
+const touch = { id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
+const stick = $('#stick'), pad = $('#pad');
+let isTouch = false;
+function enableTouch() { if (isTouch) return; isTouch = true; pad.hidden = state !== 'play'; }
+cv.addEventListener('touchstart', e => {
+  enableTouch(); e.preventDefault(); mouse.used = false;
+  for (const t of e.changedTouches) {
+    if (touch.id === null) {
+      const r = stage.getBoundingClientRect();
+      touch.id = t.identifier; touch.ox = t.clientX; touch.oy = t.clientY; touch.dx = touch.dy = 0;
+      stick.hidden = false; stick.style.left = (t.clientX - r.left - 48) + 'px'; stick.style.top = (t.clientY - r.top - 48) + 'px';
+      stick.firstElementChild.style.transform = '';
+    }
+  }
+}, { passive: false });
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) if (t.identifier === touch.id) {
+    let dx = t.clientX - touch.ox, dy = t.clientY - touch.oy; const m = Math.hypot(dx, dy) || 1, c = Math.min(m, 40);
+    dx = dx / m * c; dy = dy / m * c; touch.dx = dx / 40; touch.dy = dy / 40;
+    stick.firstElementChild.style.transform = `translate(${dx}px,${dy}px)`;
+  }
+}, { passive: false });
+const endTouch = e => { for (const t of e.changedTouches) if (t.identifier === touch.id) { touch.id = null; touch.dx = touch.dy = 0; stick.hidden = true; } };
+cv.addEventListener('touchend', endTouch); cv.addEventListener('touchcancel', endTouch);
+pad.addEventListener('touchstart', e => { enableTouch(); const b = e.target.closest('button'); if (b) { e.preventDefault(); press[b.dataset.k] = true; } }, { passive: false });
+pad.addEventListener('mousedown', e => { const b = e.target.closest('button'); if (b) press[b.dataset.k] = true; });
+
+/* ---------- 遊戲狀態 ---------- */
+let state = 'hub';           // hub | play | modal
+let run = null, fl = null, P = null;
+let cam = { x: 0, y: 0 }, shake = 0, time = 0;
+let parts = [], texts = [];
+
+function newRun() {
+  const u = meta.up;
+  run = { floor: 0, echoes: 0, relics: [], kills: 0 };
+  P = {
+    x: 0, y: 0, r: 11, hpMax: 100 + u.vit * 15, stMax: 100 + u.end * 12, saMax: 100 + u.will * 15,
+    flaskMax: 2 + u.flask, dmg: 1 + u.blade * 0.1, facing: 0, st: 'idle', t: 0, act: null,
+    inv: 0, stDelay: 0, flash: 0, healT: 0
+  };
+  P.hp = P.hpMax; P.sta = P.stMax; P.san = P.saMax; P.flask = P.flaskMax;
+  meta.runs++; saveMeta();
+  enterFloor(0);
+}
+const has = id => run.relics.includes(id);
+
+/* ---------- 地圖生成 ---------- */
+function genFloor(f) {
+  const tiles = new Uint8Array(MW * MH);
+  const F = { f, tiles, rooms: [], en: [], obj: [], bolts: [], haz: [], boss: null, puzzle: null, phT: 6, cleared: false };
+  const carve = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (x > 0 && y > 0 && x < MW - 1 && y < MH - 1) tiles[y * MW + x] = 1; };
+  const mid = r => ({ x: (r.x + r.w / 2) * T, y: (r.y + r.h / 2) * T });
+  const spot = (r, m = 1) => ({ x: (ri(r.x + m, r.x + r.w - 1 - m) + .5) * T, y: (ri(r.y + m, r.y + r.h - 1 - m) + .5) * T });
+
+  if (f === 3) { // 頭目層：一個大空間
+    const r = { x: 14, y: 9, w: 28, h: 22 }; carve(r.x, r.y, r.x + r.w - 1, r.y + r.h - 1); F.rooms.push(r);
+    F.start = { x: (r.x + r.w / 2) * T, y: (r.y + r.h - 3) * T };
+    F.boss = mkEnemy('boss', (r.x + r.w / 2) * T, (r.y + 7) * T, f); F.en.push(F.boss);
+    return F;
+  }
+  let guard = 0;
+  while (F.rooms.length < 8 && guard++ < 400) {
+    const w = ri(7, 12), h = ri(6, 9), x = ri(2, MW - w - 2), y = ri(2, MH - h - 2);
+    if (F.rooms.some(o => x < o.x + o.w + 2 && x + w + 2 > o.x && y < o.y + o.h + 2 && y + h + 2 > o.y)) continue;
+    F.rooms.push({ x, y, w, h });
+  }
+  if (F.rooms.length < 7) return genFloor(f);
+  F.rooms.sort((a, b) => a.x + a.y * .4 - b.x - b.y * .4);
+  F.rooms.forEach(r => carve(r.x, r.y, r.x + r.w - 1, r.y + r.h - 1));
+  const link = (a, b) => {
+    const ax = Math.floor(a.x + a.w / 2), ay = Math.floor(a.y + a.h / 2), bx = Math.floor(b.x + b.w / 2), by = Math.floor(b.y + b.h / 2);
+    if (Math.random() < .5) { carve(Math.min(ax, bx), ay, Math.max(ax, bx), ay + 1); carve(bx, Math.min(ay, by), bx + 1, Math.max(ay, by)); }
+    else { carve(ax, Math.min(ay, by), ax + 1, Math.max(ay, by)); carve(Math.min(ax, bx), by, Math.max(ax, bx), by + 1); }
+  };
+  for (let i = 1; i < F.rooms.length; i++) link(F.rooms[i - 1], F.rooms[i]);
+  link(F.rooms[0], F.rooms[ri(3, F.rooms.length - 1)]);
+
+  const R = F.rooms, startR = R[0], exitR = R[R.length - 1];
+  const others = shuffle(R.slice(1, -1));
+  const vaultR = others[0], hintR = others[1], brazR = others[2], idolR = others[3];
+  F.start = mid(startR);
+  F.obj.push({ k: 'stairs', ...mid(exitR) });
+  F.obj.push({ k: 'brazier', ...spot(brazR, 2), lit: false });
+  F.obj.push({ k: 'idol', ...spot(idolR, 2), used: false });
+  // 謎題：三根石柱要照順序觸碰，順序刻在另一個房間的地上，理智夠低才看得見
+  const glyphs = shuffle([0, 1, 2, 3, 4, 5]).slice(0, 3);
+  F.puzzle = { order: glyphs.slice(), idx: 0, solved: false };
+  const vm = mid(vaultR), pos = shuffle(glyphs.slice());
+  pos.forEach((gl, i) => F.obj.push({ k: 'pillar', x: vm.x + (i - 1) * 64, y: vm.y, gl, on: false }));
+  const hm = mid(hintR); F.obj.push({ k: 'hint', x: hm.x, y: hm.y });
+  if (meta.remnant && meta.remnant.floor === f) F.obj.push({ k: 'remnant', ...spot(pick(others.slice(1)), 1), amt: meta.remnant.amt });
+
+  for (const r of R) {
+    if (r === startR) continue;
+    let n = ri(1, 2) + Math.floor(f * .8) + (r === exitR ? 1 : 0); if (r === vaultR) n = 1;
+    for (let i = 0; i < n; i++) {
+      const roll = Math.random(), s = spot(r);
+      const type = roll < (f === 0 ? .7 : .5) ? 'drowned' : roll < (f === 0 ? .92 : .8) ? 'cultist' : 'tendril';
+      F.en.push(mkEnemy(type, s.x, s.y, f));
+    }
+  }
+  return F;
+}
+function mkEnemy(type, x, y, f) {
+  const s = 1 + f * .28;
+  const B = {
+    drowned: { r: 12, hp: 58, spd: 74, dmg: 17, echo: 10 },
+    cultist: { r: 11, hp: 38, spd: 62, dmg: 12, echo: 13 },
+    tendril: { r: 13, hp: 84, spd: 0, dmg: 24, echo: 16 },
+    phantom: { r: 11, hp: 1, spd: 118, dmg: 14, echo: 8 },
+    boss: { r: 46, hp: 950, spd: 22, dmg: 26, echo: 300 }
+  }[type];
+  const sc = type === 'boss' || type === 'phantom' ? 1 : s;
+  return { type, x, y, r: B.r, hp: B.hp * sc, max: B.hp * sc, spd: B.spd, dmg: Math.round(B.dmg * (type === 'boss' ? 1 : 1 + f * .2)), echo: B.echo, st: 'idle', t: 0, cd: rnd(.5, 2), ang: 0, flash: 0, stun: 0, hit: false, seed: Math.random() * 99, ph: 0, n: 0 };
+}
+const solid = (x, y) => { const tx = Math.floor(x / T), ty = Math.floor(y / T); return tx < 0 || ty < 0 || tx >= MW || ty >= MH || fl.tiles[ty * MW + tx] === 0; };
+function move(e, dx, dy) {
+  const r = e.r - 2;
+  const free = (x, y) => !solid(x - r, y - r) && !solid(x + r, y - r) && !solid(x - r, y + r) && !solid(x + r, y + r);
+  if (free(e.x + dx, e.y)) e.x += dx;
+  if (free(e.x, e.y + dy)) e.y += dy;
+}
+
+function enterFloor(f) {
+  run.floor = f; fl = genFloor(f); P.x = fl.start.x; P.y = fl.start.y; P.st = 'idle'; P.act = null; P.inv = 1;
+  parts = []; texts = []; meta.deepest = Math.max(meta.deepest, f + 1); saveMeta();
+  $('#floorName').textContent = `第 ${f + 1} 層　${FLOORS[f]}`;
+  toast(FLOORS[f]); setState('play');
+}
+
+/* ---------- 戰鬥 ---------- */
+function gainEcho(n) { n = Math.round(n * (has('shell') ? 1.3 : 1)); run.echoes += n; return n; }
+function spark(x, y, col, n = 8, sp = 120) { for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(sp * .3, sp); parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: rnd(.25, .6), m: .6, col, s: rnd(1.5, 3.5) }); } }
+function float(x, y, s, col = '#e6e1cf') { texts.push({ x, y, s, col, l: .9 }); }
+
+function hurtPlayer(d, san = 0) {
+  if (P.inv > 0 || state !== 'play') return false;
+  P.hp -= d; P.san = Math.max(0, P.san - san); P.inv = .45; P.flash = .2; shake = 8;
+  spark(P.x, P.y, '#c0473c', 10); float(P.x, P.y - 18, '-' + Math.round(d), '#ff8a7a');
+  if (P.st === 'heal') { P.st = 'idle'; }
+  if (P.hp <= 0) die();
+  return true;
+}
+function hitEnemy(e, d, heavy) {
+  if (has('blood') && P.san < P.saMax / 2) d *= 1.3;
+  d *= P.dmg; e.hp -= d; e.flash = .12; spark(e.x, e.y, e.type === 'phantom' ? '#9163d6' : '#3fb7a6', heavy ? 12 : 6);
+  float(e.x, e.y - e.r - 6, Math.round(d), heavy ? '#eaa53a' : '#e6e1cf');
+  if (e.type !== 'boss') {
+    e.stun = Math.max(e.stun, heavy ? .5 : .16);
+    if (heavy && (e.st === 'wind' || e.st === 'cast')) { e.st = 'chase'; e.t = 0; }
+    const a = Math.atan2(e.y - P.y, e.x - P.x); move(e, Math.cos(a) * (heavy ? 22 : 8), Math.sin(a) * (heavy ? 22 : 8));
+    if (e.st === 'idle') e.st = 'chase';
+  }
+  if (e.hp <= 0) killEnemy(e);
+}
+function killEnemy(e) {
+  e.dead = true; run.kills++;
+  let n = e.echo; if (e.type === 'phantom' && has('bell')) n *= 3;
+  n = gainEcho(n); float(e.x, e.y - 24, '+' + n + ' 迴響', '#eaa53a'); spark(e.x, e.y, '#eaa53a', 14, 160);
+  if (has('blade')) P.hp = Math.min(P.hpMax, P.hp + 4);
+  if (e.type === 'boss') { fl.en.forEach(o => { if (o !== e) o.dead = true; }); fl.haz = []; fl.bolts = []; shake = 20; setTimeout(victory, 1400); }
+}
+function die() {
+  P.hp = 0; shake = 14; spark(P.x, P.y, '#e6e1cf', 30, 200);
+  const drop = Math.floor(run.echoes / 2), keep = run.echoes - drop;
+  const lost = meta.remnant ? meta.remnant.amt : 0;
+  meta.echoes += keep; meta.remnant = drop > 0 ? { floor: run.floor, amt: drop } : null; saveMeta();
+  setState('modal');
+  show(`<h2>你溺斃了</h2>
+    <p>燈掉進水裡。在光完全消失之前，有人把它撿了起來。</p>
+    <p class="dim">第 ${run.floor + 1} 層　${FLOORS[run.floor]}　擊殺 ${run.kills}</p>
+    <p>帶回燈塔的迴響：<b>${keep}</b>${drop ? `<br>遺落在第 ${run.floor + 1} 層的迴響：<b>${drop}</b>。下次走到那一層可以撿回來，在那之前再死一次就會消失。` : ''}${lost ? `<br>上次遺落的 ${lost} 迴響已經消失。` : ''}</p>
+    <button class="go" data-a="hub">回到燈塔</button>`);
+}
+function victory() {
+  if (state !== 'play') return;
+  meta.echoes += run.echoes; meta.wins++; meta.remnant = null; saveMeta(); setState('modal');
+  if (meta.pages >= PAGES.length) {
+    show(`<h2>潮母沉下去了</h2>
+      <p>水面安靜下來。你手上的燈還亮著，比任何時候都亮。地窖裡有十一件外套，第十二件穿在你身上。</p>
+      <p>你讀完了全部的日誌。你知道這盞燈是什麼。</p>
+      <div class="rows"><button data-a="endA"><b>把燈熄掉</b><small>讓霧港永遠留在黑暗裡</small></button><button data-a="endB"><b>提著燈走回塔頂</b><small>讓光繼續轉</small></button></div>`);
+  } else {
+    show(`<h2>潮母沉下去了</h2>
+      <p>水面安靜下來。你提著燈走回塔頂，把它掛回原位。光又開始轉了。</p>
+      <p>霧沒有散。海面下，有東西跟著光抬起頭。</p>
+      <p class="dim">日誌還缺 ${PAGES.length - meta.pages} 頁。它們被鎖在每一層的石柱後面。讀完之後，也許結局會不一樣。</p>
+      <p>帶回燈塔的迴響：<b>${run.echoes}</b></p>
+      <button class="go" data-a="hub">回到燈塔</button>`);
+  }
+}
+
+/* ---------- 玩家 ---------- */
+function aimAngle(range) {
+  if (mouse.used) return Math.atan2(mouse.y + cam.y - P.y, mouse.x + cam.x - P.x);
+  let best = null, bd = range + 60;
+  for (const e of fl.en) { const d = dist(e, P) - e.r; if (!e.dead && d < bd) { bd = d; best = e; } }
+  return best ? Math.atan2(best.y - P.y, best.x - P.x) : P.facing;
+}
+function updatePlayer(dt) {
+  let mx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) + touch.dx, my = (keys.down ? 1 : 0) - (keys.up ? 1 : 0) + touch.dy;
+  const ml = Math.hypot(mx, my); if (ml > 1) { mx /= ml; my /= ml; }
+  const moving = ml > .15;
+  P.inv -= dt; P.flash -= dt; P.stDelay -= dt;
+  if (P.stDelay <= 0 && P.st !== 'roll') P.sta = Math.min(P.stMax, P.sta + 48 * dt);
+
+  // 理智：持續流失。歸零後開始掉血
+  const drain = .42 * (has('eye') ? 1.5 : 1) * (has('salt') ? .6 : 1) * (run.floor === 3 ? 1.6 : 1);
+  P.san = Math.max(0, P.san - drain * dt);
+  if (P.san <= 0) { P.hp -= 2.5 * dt; if (P.hp <= 0) return die(); }
+
+  if (P.st === 'idle') {
+    if (moving) { P.facing = Math.atan2(my, mx); move(P, mx * 158 * dt, my * 158 * dt); }
+    const rollCost = 26 * (has('cloak') ? .6 : 1);
+    if (press.roll && P.sta >= rollCost * .5) {
+      P.sta = Math.max(0, P.sta - rollCost); P.stDelay = .7; P.st = 'roll'; P.t = .36; P.inv = .3;
+      P.rollA = moving ? Math.atan2(my, mx) : P.facing;
+    } else if ((press.light || press.heavy) && P.sta > 4) {
+      const heavy = !!press.heavy && !press.light;
+      const A = heavy ? { wind: .36, act: .12, rec: .38, dmg: 54 * (has('anchor') ? 1.5 : 1), range: 62, arc: 2.5, cost: 34, heavy: true }
+                      : { wind: .09, act: .1, rec: .2, dmg: 22 * (has('blade') ? 1.2 : 1), range: 50, arc: 2.0, cost: 15, heavy: false };
+      P.sta = Math.max(0, P.sta - A.cost); P.stDelay = .75; A.ang = aimAngle(A.range); P.facing = A.ang; A.ph = 0; A.t = A.wind;
+      P.act = A; P.st = 'atk';
+    } else if (press.heal && P.flask > 0 && P.hp < P.hpMax) { P.st = 'heal'; P.t = .75; }
+    else if (press.use) interact();
+  } else if (P.st === 'roll') {
+    P.t -= dt; move(P, Math.cos(P.rollA) * 340 * dt, Math.sin(P.rollA) * 340 * dt);
+    if (Math.random() < .5) parts.push({ x: P.x, y: P.y, vx: 0, vy: 0, l: .25, m: .25, col: '#93aaa3', s: 3 });
+    if (P.t <= 0) P.st = 'idle';
+  } else if (P.st === 'atk') {
+    const A = P.act; A.t -= dt;
+    if (A.ph === 0) move(P, Math.cos(A.ang) * 60 * dt, Math.sin(A.ang) * 60 * dt);
+    if (A.t <= 0) {
+      if (A.ph === 0) {
+        A.ph = 1; A.t = A.act;
+        for (const e of fl.en) { if (e.dead) continue; const d = dist(e, P); if (d < A.range + e.r && (d < e.r + 14 || angDiff(Math.atan2(e.y - P.y, e.x - P.x), A.ang) < A.arc / 2)) hitEnemy(e, A.dmg, A.heavy); }
+        if (A.heavy) shake = Math.max(shake, 4);
+      } else if (A.ph === 1) { A.ph = 2; A.t = A.rec; }
+      else { P.st = 'idle'; P.act = null; }
+    }
+  } else if (P.st === 'heal') {
+    P.t -= dt; if (moving) move(P, mx * 60 * dt, my * 60 * dt);
+    if (P.t <= 0) { P.flask--; const h = 45 + (has('oil') ? 20 : 0); P.hp = Math.min(P.hpMax, P.hp + h); float(P.x, P.y - 20, '+' + h, '#7fe0a0'); spark(P.x, P.y, '#eaa53a', 12, 80); P.st = 'idle'; }
+  }
+}
+function nearObj() { let b = null, bd = 44; for (const o of fl.obj) { if (o.k === 'hint' || o.gone) continue; const d = dist(o, P); if (d < bd) { bd = d; b = o; } } return b; }
+function promptFor(o) {
+  if (!o) return '';
+  const key = isTouch ? '調查' : 'E';
+  if (o.k === 'stairs') return `${key}　往下走`;
+  if (o.k === 'brazier') return o.lit ? '' : `${key}　點燃火盆，回復理智並補滿燈油`;
+  if (o.k === 'idol') return o.used ? '' : `${key}　凝視神像，失去理智換取迴響`;
+  if (o.k === 'pillar') return fl.puzzle.solved || o.on ? '' : `${key}　觸碰石柱`;
+  if (o.k === 'remnant') return `${key}　拾回遺落的迴響`;
+  return '';
+}
+function interact() {
+  const o = nearObj(); if (!o || !promptFor(o)) return;
+  if (o.k === 'stairs') return offerRelics();
+  if (o.k === 'brazier') { o.lit = true; P.san = P.saMax; P.flask = P.flaskMax; spark(o.x, o.y, '#eaa53a', 24, 140); toast('火盆點燃了'); }
+  if (o.k === 'idol') { o.used = true; P.san = Math.max(0, P.san - 30); const n = gainEcho(25 + run.floor * 10); float(o.x, o.y - 26, '+' + n + ' 迴響', '#eaa53a'); spark(o.x, o.y, '#9163d6', 24, 140); toast('它也在看你'); shake = 6; }
+  if (o.k === 'remnant') { o.gone = true; const n = o.amt; run.echoes += n; meta.remnant = null; saveMeta(); float(o.x, o.y - 20, '+' + n + ' 迴響', '#eaa53a'); spark(o.x, o.y, '#eaa53a', 30, 180); toast('迴響回到你身上'); }
+  if (o.k === 'pillar') {
+    const Z = fl.puzzle;
+    if (o.gl === Z.order[Z.idx]) {
+      o.on = true; Z.idx++; spark(o.x, o.y, '#3fb7a6', 16, 120);
+      if (Z.idx === 3) { Z.solved = true; shake = 6; solvePuzzle(o); }
+    } else {
+      fl.obj.forEach(p => { if (p.k === 'pillar') p.on = false; }); Z.idx = 0; P.san = Math.max(0, P.san - 15); shake = 8; toast('順序錯了，有東西被吵醒');
+      for (let i = 0; i < 2; i++) { const a = rnd(0, TAU); fl.en.push(Object.assign(mkEnemy('phantom', P.x + Math.cos(a) * 170, P.y + Math.sin(a) * 170, run.floor), { st: 'chase' })); }
+    }
+  }
+}
+function solvePuzzle(o) {
+  const n = gainEcho(45 + run.floor * 15); P.flask = Math.min(P.flaskMax, P.flask + 1);
+  float(o.x, o.y - 30, '+' + n + ' 迴響', '#eaa53a');
+  if (meta.pages < PAGES.length) {
+    const i = meta.pages++; saveMeta(); setState('modal');
+    show(`<h2>石柱後面有一頁紙</h2><p class="page">${PAGES[i]}</p><p class="dim">日誌 ${meta.pages} / ${PAGES.length}　得到 ${n} 迴響，燈油 +1</p><button class="go" data-a="resume">繼續</button>`);
+  } else toast('石柱沉了下去');
+}
+function offerRelics() {
+  setState('modal');
+  const pool = shuffle(RELICS.filter(r => !has(r.id))).slice(0, 3);
+  show(`<h2>樓梯往下</h2><p>台階上放著前人留下的東西。只能帶走一樣。</p>
+    <div class="rows">${pool.map(r => `<button data-a="relic" data-id="${r.id}"><b>${r.n}</b><small>${r.d}</small></button>`).join('')}</div>`);
+}
+
+/* ---------- 敵人 ---------- */
+function updateEnemies(dt) {
+  // 理智太低時，幻影會自己找上門
+  if (P.san < P.saMax * .4 && run.floor < 3) {
+    fl.phT -= dt;
+    if (fl.phT <= 0) { fl.phT = P.san <= 0 ? 4 : 9; const a = rnd(0, TAU); fl.en.push(Object.assign(mkEnemy('phantom', P.x + Math.cos(a) * 260, P.y + Math.sin(a) * 260, run.floor), { st: 'chase' })); }
+  }
+  for (const e of fl.en) {
+    if (e.dead) continue;
+    e.flash -= dt; if (e.stun > 0) { e.stun -= dt; continue; }
+    const d = dist(e, P), a = Math.atan2(P.y - e.y, P.x - e.x);
+    if (e.type === 'drowned') {
+      if (e.st === 'idle') { if (d < 230) e.st = 'chase'; }
+      else if (e.st === 'chase') { e.ang = a; if (d < 46) { e.st = 'wind'; e.t = .55; } else if (d < 520) move(e, Math.cos(a) * e.spd * dt, Math.sin(a) * e.spd * dt); }
+      else if (e.st === 'wind') { e.t -= dt; if (e.t <= 0) { e.st = 'strike'; e.t = .2; e.hit = false; } }
+      else if (e.st === 'strike') { e.t -= dt; move(e, Math.cos(e.ang) * 250 * dt, Math.sin(e.ang) * 250 * dt); if (!e.hit && d < e.r + P.r + 8) { e.hit = true; hurtPlayer(e.dmg); } if (e.t <= 0) { e.st = 'rec'; e.t = .75; } }
+      else if (e.st === 'rec') { e.t -= dt; if (e.t <= 0) e.st = 'chase'; }
+    } else if (e.type === 'cultist') {
+      if (e.st === 'idle') { if (d < 280) e.st = 'chase'; }
+      else if (e.st === 'chase') {
+        e.ang = a; if (d < 140) move(e, -Math.cos(a) * e.spd * dt, -Math.sin(a) * e.spd * dt); else if (d > 230 && d < 560) move(e, Math.cos(a) * e.spd * dt, Math.sin(a) * e.spd * dt);
+        e.cd -= dt; if (e.cd <= 0 && d < 340) { e.st = 'cast'; e.t = .65; }
+      } else if (e.st === 'cast') { e.ang = a; e.t -= dt; if (e.t <= 0) { fl.bolts.push({ x: e.x, y: e.y, vx: Math.cos(a) * 195, vy: Math.sin(a) * 195, dmg: e.dmg, san: 8, l: 3 }); e.st = 'chase'; e.cd = 2.3; } }
+    } else if (e.type === 'tendril') {
+      e.cd -= dt; if (d < 165 && e.cd <= 0) { fl.haz.push({ x: P.x, y: P.y, r: 40, t: .9, m: .9, dmg: e.dmg }); e.cd = 2.1; e.t = .3; }
+    } else if (e.type === 'phantom') {
+      e.x += Math.cos(a) * e.spd * dt; e.y += Math.sin(a) * e.spd * dt;
+      if (d < e.r + P.r && P.inv <= 0) { hurtPlayer(e.dmg, 10); e.dead = true; spark(e.x, e.y, '#9163d6', 14); }
+    } else if (e.type === 'boss') updateBoss(e, dt, d, a);
+  }
+  fl.en = fl.en.filter(e => !e.dead);
+}
+function updateBoss(e, dt, d, a) {
+  const p2 = e.hp < e.max * .5;
+  move(e, Math.cos(a) * e.spd * dt, Math.sin(a) * e.spd * dt);
+  if (d < e.r + P.r + 2) hurtPlayer(e.dmg * .7);
+  e.cd -= dt * (p2 ? 1.35 : 1);
+  if (e.cd > 0) return;
+  const k = e.n++ % 3;
+  if (k === 0) { // 觸腕連擊：落點跟著你走
+    const n = p2 ? 6 : 4;
+    for (let i = 0; i < n; i++) setTimeout(() => { if (state === 'play' && !e.dead && fl.boss === e) fl.haz.push({ x: P.x + rnd(-20, 20), y: P.y + rnd(-20, 20), r: 46, t: .85, m: .85, dmg: e.dmg }); }, i * 380);
+    e.cd = 3.4;
+  } else if (k === 1) { // 潮汐彈幕：留一個缺口
+    const n = 16, gap = ri(0, n - 1), rings = p2 ? 2 : 1;
+    for (let q = 0; q < rings; q++) setTimeout(() => {
+      if (state !== 'play' || e.dead || fl.boss !== e) return;
+      const off = rnd(0, TAU);
+      for (let i = 0; i < n; i++) { if (i === gap || i === (gap + 1) % n) continue; const b = off + i / n * TAU; fl.bolts.push({ x: e.x + Math.cos(b) * e.r, y: e.y + Math.sin(b) * e.r, vx: Math.cos(b) * 150, vy: Math.sin(b) * 150, dmg: 14, san: 6, l: 5 }); }
+    }, q * 700);
+    e.cd = 3;
+  } else { // 召喚溺者，周圍同時落下觸腕
+    if (fl.en.length < 5) for (let i = 0; i < (p2 ? 2 : 1); i++) { const b = rnd(0, TAU); fl.en.push(Object.assign(mkEnemy('drowned', e.x + Math.cos(b) * 90, e.y + Math.sin(b) * 90, 2), { st: 'chase', echo: 0 })); }
+    for (let i = 0; i < 5; i++) { const b = i / 5 * TAU + rnd(0, 1); fl.haz.push({ x: e.x + Math.cos(b) * 120, y: e.y + Math.sin(b) * 120, r: 44, t: 1.1, m: 1.1, dmg: e.dmg }); }
+    e.cd = 3.2;
+  }
+}
+function updateWorld(dt) {
+  for (const b of fl.bolts) {
+    b.x += b.vx * dt; b.y += b.vy * dt; b.l -= dt;
+    if (solid(b.x, b.y)) b.l = 0;
+    else if (Math.hypot(b.x - P.x, b.y - P.y) < P.r + 5) { if (hurtPlayer(b.dmg, b.san)) b.l = 0; }
+  }
+  fl.bolts = fl.bolts.filter(b => b.l > 0);
+  for (const h of fl.haz) { h.t -= dt; if (h.t <= 0) { if (Math.hypot(h.x - P.x, h.y - P.y) < h.r + P.r - 4) hurtPlayer(h.dmg); spark(h.x, h.y, '#3fb7a6', 16, 170); shake = Math.max(shake, 3); } }
+  fl.haz = fl.haz.filter(h => h.t > 0);
+  for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .92; p.vy *= .92; p.l -= dt; }
+  parts = parts.filter(p => p.l > 0);
+  for (const t of texts) { t.y -= 26 * dt; t.l -= dt; }
+  texts = texts.filter(t => t.l > 0);
+  shake = Math.max(0, shake - 30 * dt);
+}
+
+/* ---------- 繪製 ---------- */
+const dark = document.createElement('canvas'); dark.width = W; dark.height = H; const dg = dark.getContext('2d');
+const hash = (x, y) => { let n = x * 374761393 + y * 668265263; n = (n ^ (n >> 13)) * 1274126177; return ((n ^ (n >> 16)) >>> 0) / 4294967295; };
+function glyph(c, id, x, y, s) {
+  c.beginPath();
+  if (id === 0) { c.arc(x, y, s, 0, TAU); c.moveTo(x - s, y); c.lineTo(x + s, y); }
+  else if (id === 1) { c.moveTo(x, y - s); c.lineTo(x + s, y + s * .8); c.lineTo(x - s, y + s * .8); c.closePath(); c.moveTo(x, y - s * .2); c.lineTo(x, y + s * .8); }
+  else if (id === 2) { c.moveTo(x - s, y); c.quadraticCurveTo(x, y - s * 1.2, x + s, y); c.quadraticCurveTo(x, y + s * 1.2, x - s, y); c.moveTo(x + s * .35, y); c.arc(x, y, s * .35, 0, TAU); }
+  else if (id === 3) { c.moveTo(x, y + s); c.lineTo(x, y - s); c.moveTo(x - s * .8, y - s); c.lineTo(x - s * .8, y - s * .1); c.lineTo(x + s * .8, y - s * .1); c.lineTo(x + s * .8, y - s); }
+  else if (id === 4) { for (let i = 0; i < 40; i++) { const a = i / 40 * TAU * 2, r = s * i / 40; c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } }
+  else { c.moveTo(x - s, y - s); c.lineTo(x + s, y + s); c.moveTo(x + s, y - s); c.lineTo(x - s, y + s); c.moveTo(x + s * .5, y); c.arc(x, y, s * .5, 0, TAU); }
+  c.stroke();
+}
+function draw() {
+  const mad = 1 - P.san / P.saMax, sx = (Math.random() - .5) * shake, sy = (Math.random() - .5) * shake;
+  cam.x = clamp(P.x - W / 2, 0, MW * T - W); cam.y = clamp(P.y - H / 2, 0, MH * T - H);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#020505'; g.fillRect(0, 0, W, H);
+  g.setTransform(1, 0, 0, 1, -Math.round(cam.x) + sx, -Math.round(cam.y) + sy);
+  const x0 = Math.floor(cam.x / T), y0 = Math.floor(cam.y / T);
+  for (let ty = y0; ty <= y0 + Math.ceil(H / T) + 1; ty++) for (let tx = x0; tx <= x0 + Math.ceil(W / T) + 1; tx++) {
+    if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) continue;
+    const h = hash(tx, ty), px = tx * T, py = ty * T;
+    if (fl.tiles[ty * MW + tx]) {
+      const v = 34 + h * 14; g.fillStyle = `rgb(${v * .62 | 0},${v * 1.25 | 0},${v * 1.2 | 0})`; g.fillRect(px, py, T, T);
+      if (h > .82) { g.fillStyle = 'rgba(63,183,166,.08)'; g.fillRect(px + 6, py + 10, 18, 9); }
+      if (h < .1) { g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(px + 4, py + 6); g.lineTo(px + 20, py + 24); g.stroke(); }
+    } else if (ty + 1 < MH && fl.tiles[(ty + 1) * MW + tx]) { g.fillStyle = '#21453f'; g.fillRect(px, py, T, T); g.fillStyle = '#10211f'; g.fillRect(px, py, T, T - 10); }
+  }
+  // 物件
+  const showHint = P.san < P.saMax * .5 || has('eye');
+  for (const o of fl.obj) {
+    if (o.gone) continue;
+    if (o.k === 'stairs') { for (let i = 0; i < 4; i++) { g.fillStyle = `rgb(${8 + i * 9},${16 + i * 12},${16 + i * 12})`; g.fillRect(o.x - 22 + i * 4, o.y - 18 + i * 8, 44 - i * 8, 8); } g.strokeStyle = '#eaa53a'; g.lineWidth = 1; g.strokeRect(o.x - 24, o.y - 20, 48, 40); }
+    else if (o.k === 'brazier') { g.fillStyle = '#2a2a26'; g.fillRect(o.x - 9, o.y - 4, 18, 12); if (o.lit) { g.fillStyle = '#eaa53a'; g.beginPath(); g.arc(o.x, o.y - 8 + Math.sin(time * 9) * 1.5, 7 + Math.sin(time * 13) * 1.5, 0, TAU); g.fill(); } }
+    else if (o.k === 'idol') { g.fillStyle = o.used ? '#23222b' : '#3a2f52'; g.beginPath(); g.moveTo(o.x, o.y - 22); g.lineTo(o.x + 13, o.y + 12); g.lineTo(o.x - 13, o.y + 12); g.closePath(); g.fill(); g.fillStyle = o.used ? '#555' : '#c9a7ff'; g.beginPath(); g.ellipse(o.x, o.y - 4, 5, 3 + Math.sin(time * 2) * 1, 0, 0, TAU); g.fill(); }
+    else if (o.k === 'pillar') { g.fillStyle = '#25413d'; g.fillRect(o.x - 13, o.y - 20, 26, 36); g.strokeStyle = o.on ? '#3fb7a6' : '#93aaa3'; g.lineWidth = 2; if (o.on) { g.shadowColor = '#3fb7a6'; g.shadowBlur = 12; } glyph(g, o.gl, o.x, o.y - 3, 8); g.shadowBlur = 0; }
+    else if (o.k === 'remnant') { g.fillStyle = `rgba(234,165,58,${.5 + Math.sin(time * 4) * .3})`; g.beginPath(); g.arc(o.x, o.y + Math.sin(time * 2) * 3, 8, 0, TAU); g.fill(); }
+    else if (o.k === 'hint') {
+      if (showHint) { g.strokeStyle = `rgba(190,150,255,${.65 + Math.sin(time * 3) * .25})`; g.lineWidth = 2.5; g.shadowColor = '#9163d6'; g.shadowBlur = 14; fl.puzzle.order.forEach((gl, i) => glyph(g, gl, o.x + (i - 1) * 44, o.y, 12)); g.shadowBlur = 0; }
+      else { g.strokeStyle = 'rgba(147,170,163,.16)'; g.lineWidth = 1; for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(o.x - 50 + i * 24, o.y - 8); g.lineTo(o.x - 40 + i * 24, o.y + 9); g.stroke(); } }
+    }
+  }
+  // 預警圈
+  for (const h of fl.haz) { const k = 1 - h.t / h.m; g.fillStyle = `rgba(192,71,60,${.12 + k * .25})`; g.beginPath(); g.arc(h.x, h.y, h.r, 0, TAU); g.fill(); g.strokeStyle = '#c0473c'; g.lineWidth = 2; g.beginPath(); g.arc(h.x, h.y, h.r * k, 0, TAU); g.stroke(); }
+  // 敵人
+  for (const e of fl.en) {
+    const fx = e.flash > 0; g.save(); g.translate(e.x, e.y);
+    if (e.type === 'drowned') {
+      if (e.st === 'wind') { g.fillStyle = 'rgba(192,71,60,.28)'; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 64, e.ang - .5, e.ang + .5); g.closePath(); g.fill(); }
+      g.fillStyle = fx ? '#fff' : '#3c6f68'; g.beginPath(); g.ellipse(0, 0, e.r, e.r * 1.1 + Math.sin(time * 5 + e.seed) * 1.2, 0, 0, TAU); g.fill();
+      g.fillStyle = '#d8f3e6'; g.fillRect(Math.cos(e.ang) * 5 - 4, Math.sin(e.ang) * 5 - 2, 2.5, 2.5); g.fillRect(Math.cos(e.ang) * 5 + 2, Math.sin(e.ang) * 5 - 2, 2.5, 2.5);
+    } else if (e.type === 'cultist') {
+      g.fillStyle = fx ? '#fff' : '#4a3a63'; g.beginPath(); g.moveTo(0, -e.r - 5); g.lineTo(e.r, e.r); g.lineTo(-e.r, e.r); g.closePath(); g.fill();
+      if (e.st === 'cast') { g.fillStyle = '#c9a7ff'; g.beginPath(); g.arc(Math.cos(e.ang) * 14, Math.sin(e.ang) * 14, 3 + (1 - e.t / .65) * 5, 0, TAU); g.fill(); }
+    } else if (e.type === 'tendril') {
+      g.strokeStyle = fx ? '#fff' : '#2f8276'; g.lineWidth = 5; g.lineCap = 'round';
+      for (let i = 0; i < 4; i++) { const b = i * 1.6 + e.seed; g.beginPath(); g.moveTo(0, 6); g.quadraticCurveTo(Math.cos(b + time * 2) * 14, -10, Math.cos(b + time * 3) * 9, -24 + Math.sin(time * 4 + i) * 4); g.stroke(); }
+      g.fillStyle = '#123'; g.beginPath(); g.ellipse(0, 8, 14, 6, 0, 0, TAU); g.fill();
+    } else if (e.type === 'phantom') {
+      g.globalAlpha = .55 + Math.sin(time * 8 + e.seed) * .2; g.fillStyle = '#9163d6'; g.beginPath(); g.arc(0, 0, e.r, Math.PI, 0); g.lineTo(e.r, 12); for (let i = 0; i < 4; i++) g.lineTo(e.r - (i + .5) * e.r / 2, 12 + (i % 2 ? 0 : 6)); g.closePath(); g.fill(); g.fillStyle = '#000'; g.fillRect(-5, -3, 3, 4); g.fillRect(2, -3, 3, 4);
+    } else {
+      g.strokeStyle = '#1f5e56'; g.lineWidth = 9; g.lineCap = 'round';
+      for (let i = 0; i < 9; i++) { const b = i / 9 * TAU + Math.sin(time + i) * .2; g.beginPath(); g.moveTo(Math.cos(b) * 30, Math.sin(b) * 30); g.quadraticCurveTo(Math.cos(b + .4) * 66, Math.sin(b + .4) * 66, Math.cos(b + Math.sin(time * 1.5 + i) * .5) * 84, Math.sin(b + Math.sin(time * 1.5 + i) * .5) * 84); g.stroke(); }
+      g.fillStyle = fx ? '#fff' : (e.hp < e.max * .5 ? '#3b2a55' : '#17403b'); g.beginPath(); g.arc(0, 0, e.r, 0, TAU); g.fill();
+      for (let i = 0; i < 7; i++) { const b = i * 2.4 + 1, rr = 10 + (i * 13) % 26, ex = Math.cos(b) * rr, ey = Math.sin(b) * rr, la = Math.atan2(P.y - e.y - ey, P.x - e.x - ex); g.fillStyle = '#e6e1cf'; g.beginPath(); g.ellipse(ex, ey, 6, 4, 0, 0, TAU); g.fill(); g.fillStyle = '#c0473c'; g.beginPath(); g.arc(ex + Math.cos(la) * 2.5, ey + Math.sin(la) * 1.5, 2, 0, TAU); g.fill(); }
+    }
+    g.restore();
+    if (e.type !== 'boss' && e.type !== 'phantom' && e.hp < e.max) { g.fillStyle = '#000'; g.fillRect(e.x - 14, e.y - e.r - 12, 28, 3); g.fillStyle = '#c0473c'; g.fillRect(e.x - 14, e.y - e.r - 12, 28 * e.hp / e.max, 3); }
+  }
+  for (const b of fl.bolts) { g.fillStyle = '#c9a7ff'; g.beginPath(); g.arc(b.x, b.y, 5, 0, TAU); g.fill(); g.fillStyle = 'rgba(145,99,214,.35)'; g.beginPath(); g.arc(b.x, b.y, 9, 0, TAU); g.fill(); }
+  // 玩家
+  if (P.hp > 0) {
+    g.save(); g.translate(P.x, P.y);
+    if (P.st === 'atk') { const A = P.act; if (A.ph === 1 || (A.ph === 2 && A.t > A.rec - .08)) { g.strokeStyle = A.heavy ? '#eaa53a' : '#e6e1cf'; g.lineWidth = A.heavy ? 7 : 4; g.globalAlpha = .85; g.beginPath(); g.arc(0, 0, A.range - 8, A.ang - A.arc / 2, A.ang + A.arc / 2); g.stroke(); g.globalAlpha = 1; } else if (A.ph === 0 && A.heavy) { g.strokeStyle = 'rgba(234,165,58,.4)'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, A.range - 8, A.ang - A.arc / 2, A.ang + A.arc / 2); g.stroke(); } }
+    g.globalAlpha = P.st === 'roll' ? .5 : (P.inv > 0 && Math.sin(time * 50) > 0 ? .5 : 1);
+    g.fillStyle = P.flash > 0 ? '#fff' : '#2b3d4a'; g.beginPath(); g.ellipse(0, 2, P.r, P.r * (P.st === 'roll' ? .7 : 1.15), 0, 0, TAU); g.fill();
+    g.fillStyle = '#d9c9a8'; g.beginPath(); g.arc(Math.cos(P.facing) * 2, -5 + Math.sin(P.facing) * 2, 5, 0, TAU); g.fill();
+    const lx = Math.cos(P.facing + 1.1) * 12, ly = Math.sin(P.facing + 1.1) * 12 + 2; g.fillStyle = '#eaa53a'; g.shadowColor = '#eaa53a'; g.shadowBlur = 14; g.beginPath(); g.arc(lx, ly, 3.5, 0, TAU); g.fill(); g.shadowBlur = 0;
+    if (P.st === 'heal') { g.strokeStyle = '#eaa53a'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 18, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - P.t / .75)); g.stroke(); }
+    g.restore();
+  }
+  for (const p of parts) { g.globalAlpha = clamp(p.l / p.m, 0, 1); g.fillStyle = p.col; g.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); } g.globalAlpha = 1;
+
+  // 黑暗：只有提燈和火盆照得到
+  dg.setTransform(1, 0, 0, 1, 0, 0); dg.globalCompositeOperation = 'source-over'; dg.fillStyle = `rgba(${4 + mad * 14 | 0},6,${8 + mad * 18 | 0},.96)`; dg.fillRect(0, 0, W, H);
+  dg.globalCompositeOperation = 'destination-out';
+  const hole = (x, y, r, k = 1) => { const gr = dg.createRadialGradient(x, y, r * .15, x, y, r); gr.addColorStop(0, `rgba(0,0,0,${k})`); gr.addColorStop(.45, `rgba(0,0,0,${k * .8})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); dg.fillStyle = gr; dg.beginPath(); dg.arc(x, y, r, 0, TAU); dg.fill(); };
+  const lr = (run.floor === 3 ? 360 : 270) + Math.sin(time * 7) * 5 - mad * 30;
+  hole(P.x - cam.x + sx, P.y - cam.y + sy, lr);
+  for (const o of fl.obj) { if (o.k === 'brazier' && o.lit) hole(o.x - cam.x, o.y - cam.y, 190); if (o.k === 'stairs') hole(o.x - cam.x, o.y - cam.y, 70, .5); if (o.k === 'remnant' && !o.gone) hole(o.x - cam.x, o.y - cam.y, 60, .7); if (o.k === 'hint' && showHint) hole(o.x - cam.x, o.y - cam.y, 90, .6); }
+  for (const b of fl.bolts) hole(b.x - cam.x, b.y - cam.y, 40, .7);
+  for (const e of fl.en) if (e.type === 'phantom') hole(e.x - cam.x, e.y - cam.y, 46, .6); else if (e.type === 'boss') hole(e.x - cam.x, e.y - cam.y, 210, .8);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(dark, 0, 0);
+  if (mad > .5) { const v = g.createRadialGradient(W / 2, H / 2, 180, W / 2, H / 2, 560); v.addColorStop(0, 'rgba(145,99,214,0)'); v.addColorStop(1, `rgba(145,99,214,${(mad - .5) * .5 + Math.sin(time * 3) * .03})`); g.fillStyle = v; g.fillRect(0, 0, W, H); }
+  g.setTransform(1, 0, 0, 1, -Math.round(cam.x), -Math.round(cam.y));
+  g.font = '700 14px "Noto Sans TC",sans-serif'; g.textAlign = 'center';
+  for (const t of texts) { g.globalAlpha = clamp(t.l * 2, 0, 1); g.fillStyle = '#000'; g.fillText(t.s, t.x + 1, t.y + 1); g.fillStyle = t.col; g.fillText(t.s, t.x, t.y); } g.globalAlpha = 1;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (fl.boss && !fl.boss.dead) { const b = fl.boss; g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(180, H - 38, 600, 10); g.fillStyle = '#c0473c'; g.fillRect(180, H - 38, 600 * clamp(b.hp / b.max, 0, 1), 10); g.strokeStyle = '#1b3633'; g.strokeRect(180, H - 38, 600, 10); g.fillStyle = '#e6e1cf'; g.font = '500 15px "Noto Serif TC",serif'; g.fillText('潮　母', W / 2, H - 46); }
+}
+
+/* ---------- 介面 ---------- */
+const ov = $('#ov'), promptEl = $('#prompt'), toastEl = $('#toast');
+let toastT = 0;
+function toast(s) { toastEl.textContent = s; toastEl.classList.add('on'); toastT = 2.2; }
+function show(html) { ov.innerHTML = `<div class="panel">${html}</div>`; ov.hidden = false; ov.scrollTop = 0; const b = ov.querySelector('button.go'); if (b && !isTouch) b.focus(); }
+function setState(s) { state = s; ov.hidden = s === 'play'; pad.hidden = !(isTouch && s === 'play'); if (s !== 'play') { promptEl.hidden = true; stick.hidden = true; touch.id = null; touch.dx = touch.dy = 0; } for (const k in press) press[k] = false; }
+function hub() {
+  setState('hub');
+  const u = meta.up;
+  show(`<h2>霧港燈塔</h2>
+    <p>燈熄了三天。鎮上的人一個接一個走進海裡。你是守燈人，地窖的門在你腳下。</p>
+    ${meta.remnant ? `<p class="dim">你有 ${meta.remnant.amt} 迴響遺落在第 ${meta.remnant.floor + 1} 層。走到那一層可以撿回來。</p>` : ''}
+    <button class="go" data-a="start">提燈下潛</button>
+    <h3>用迴響強化自己　持有 ${meta.echoes}</h3>
+    <div class="rows">${UPS.map(p => { const l = u[p.id], c = p.cost(l), full = l >= p.max; return `<button data-a="up" data-id="${p.id}" ${full || meta.echoes < c ? 'disabled' : ''}><b>${p.n}　${l} / ${p.max}</b><small>${p.d}　${full ? '已滿' : '需要 ' + c + ' 迴響'}</small></button>`; }).join('')}</div>
+    <h3>守燈日誌　${meta.pages} / ${PAGES.length}</h3>
+    ${meta.pages ? `<div class="tags">${PAGES.slice(0, meta.pages).map((_, i) => `<button data-a="read" data-id="${i}">其${'一二三四五六'[i]}</button>`).join('')}</div>` : '<p class="dim">還沒有找到任何一頁。每一層都有三根石柱，照正確的順序觸碰就能打開。順序刻在同一層的地上，清醒的人看不見。</p>'}
+    <p class="dim">下潛 ${meta.runs} 次　最深第 ${meta.deepest} 層　擊敗潮母 ${meta.wins} 次</p>`);
+}
+ov.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const a = b.dataset.a, id = b.dataset.id;
+  if (a === 'start') newRun();
+  else if (a === 'hub') hub();
+  else if (a === 'resume') setState('play');
+  else if (a === 'up') { const p = UPS.find(x => x.id === id), c = p.cost(meta.up[id]); if (meta.echoes >= c && meta.up[id] < p.max) { meta.echoes -= c; meta.up[id]++; saveMeta(); hub(); } }
+  else if (a === 'read') show(`<h2>守燈日誌</h2><p class="page">${PAGES[+id]}</p><button class="go" data-a="hub">闔上</button>`);
+  else if (a === 'relic') { run.relics.push(id); if (id === 'lung') { P.hpMax += 30; P.hp = P.hpMax; } if (id === 'oil') { P.flaskMax++; P.flask++; } enterFloor(run.floor + 1); }
+  else if (a === 'endA') show(`<h2>光熄了</h2><p>你擰緊燈芯，直到最後一點火星消失。</p><p>海面下的東西失去了方向，慢慢沉回去。霧港從此沒有燈塔，也沒有人再聽見海裡有人叫自己的名字。</p><p>地窖裡有十二件外套。不會有第十三件。</p><p class="dim">真結局　帶回燈塔的迴響：${run.echoes}</p><button class="go" data-a="hub">回到燈塔</button>`);
+  else if (a === 'endB') show(`<h2>光繼續轉</h2><p>你把燈掛回原位，在日誌的第一頁寫下：「霧又上來了。」</p><p>很多年後，會有另一個人提著同一盞燈走下地窖。你希望他比你勇敢。</p><p class="dim">輪迴結局　帶回燈塔的迴響：${run.echoes}</p><button class="go" data-a="hub">回到燈塔</button>`);
+});
+
+const H_ = { hp: $('#fHp'), st: $('#fSt'), sa: $('#fSa'), tHp: $('#tHp'), tSt: $('#tSt'), tSa: $('#tSa'), fl: $('#tFl'), ec: $('#tEc') };
+let hudKey = '';
+function hud() {
+  const hp = P ? Math.max(0, Math.ceil(P.hp)) : 100, st = P ? Math.floor(P.sta) : 100, sa = P ? Math.ceil(P.san) : 100;
+  const k = [hp, st, sa, P ? P.flask : 2, run ? run.echoes : 0].join();
+  if (k === hudKey) return; hudKey = k;
+  H_.hp.style.transform = `scaleX(${P ? clamp(P.hp / P.hpMax, 0, 1) : 1})`; H_.st.style.transform = `scaleX(${P ? P.sta / P.stMax : 1})`; H_.sa.style.transform = `scaleX(${P ? P.san / P.saMax : 1})`;
+  H_.tHp.textContent = hp; H_.tSt.textContent = st; H_.tSa.textContent = sa; H_.fl.textContent = P ? P.flask : 2 + meta.up.flask; H_.ec.textContent = run ? run.echoes : 0;
+}
+
+/* ---------- 主迴圈 ---------- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.033, (now - last) / 1000); last = now; time += dt;
+  if (state === 'play') {
+    updatePlayer(dt);
+    if (state === 'play') { updateEnemies(dt); updateWorld(dt); }
+    const pr = state === 'play' ? promptFor(nearObj()) : ''; promptEl.hidden = !pr; if (pr) promptEl.textContent = pr;
+  }
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove('on'); }
+  if (fl) draw(); else { g.fillStyle = '#020505'; g.fillRect(0, 0, W, H); }
+  hud();
+  for (const k in press) press[k] = false;
+  requestAnimationFrame(frame);
+}
+hub();
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>

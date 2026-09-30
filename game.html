@@ -262,7 +262,10 @@ function genFloor(f) {
   const vm = mid(vaultR), pos = shuffle(glyphs.slice());
   pos.forEach((gl, i) => F.obj.push({ k: 'pillar', x: vm.x + (i - 1) * 64, y: vm.y, gl, on: false }));
   const hm = mid(hintR); F.obj.push({ k: 'hint', x: hm.x, y: hm.y });
-  if (meta.remnant && meta.remnant.floor === f) F.obj.push({ k: 'remnant', ...spot(pick(others.slice(1)), 1), amt: meta.remnant.amt });
+  if (meta.remnant && meta.remnant.floor === f) { // 避開其他物件，免得調查時先碰到別的東西
+    let s, n = 0; do { s = spot(pick(others.slice(1)), 1); } while (n++ < 50 && F.obj.some(o => Math.hypot(o.x - s.x, o.y - s.y) < 90));
+    F.obj.push({ k: 'remnant', ...s, amt: meta.remnant.amt });
+  }
 
   for (const r of R) {
     if (r === startR) continue;

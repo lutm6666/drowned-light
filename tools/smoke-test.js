@@ -27,8 +27,10 @@ step(3); assert(t.state === 'hub', 'starts in the lighthouse');
 click('start'); step(2); assert(t.state === 'play' && t.fl.en.length > 0, 'run starts with enemies on floor 1');
 
 function fight(frames, god) { // 走向最近的敵人並攻擊
+  let lastK = t.run.kills, still = 0;
   for (let i = 0; i < frames && t.state === 'play'; i++) {
     const P = t.P; if (god) { P.hp = P.hpMax; P.san = P.saMax; }
+    if (t.run.kills !== lastK) { lastK = t.run.kills; still = 0; } else if (++still > 240 && t.fl.en[0]) { still = 0; const e = t.fl.en[0]; P.x = e.x - 30; P.y = e.y; } // 卡在牆角就直接走到敵人旁邊
     const e = t.fl.en.slice().sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y))[0];
     if (e) { const d = Math.hypot(e.x - P.x, e.y - P.y); if (d > 300) { P.x = e.x - 60; P.y = e.y; } t.keys.right = e.x > P.x + 20; t.keys.left = e.x < P.x - 20; t.keys.down = e.y > P.y + 20; t.keys.up = e.y < P.y - 20; if (i % 9 === 0) t.press[i % 27 === 0 ? 'heavy' : 'light'] = true; if (i % 61 === 0) t.press.roll = true; }
     step();
@@ -36,8 +38,8 @@ function fight(frames, god) { // 走向最近的敵人並攻擊
   for (const k in t.keys) t.keys[k] = false;
 }
 for (let f = 0; f < 3; f++) {
-  const n0 = t.fl.en.length; fight(2500, true);
-  assert(t.run.kills > 0 && t.fl.en.length < n0, `floor ${f + 1}: enemies can be killed (${t.run.kills} kills, ${t.run.echoes} echoes)`);
+  const n0 = t.fl.en.length, k0 = t.run.kills; fight(2500, true);
+  assert(t.run.kills > k0 && t.fl.en.length < n0, `floor ${f + 1}: enemies can be killed (${t.run.kills} kills, ${t.run.echoes} echoes)`);
   // 先試錯一次，再照正確順序解謎
   const pil = t.fl.obj.filter(o => o.k === 'pillar'), Z = t.fl.puzzle;
   const wrong = pil.find(p => p.gl !== Z.order[0]); t.P.x = wrong.x; t.P.y = wrong.y + 20; t.P.st = 'idle'; t.press.use = true; step();
@@ -49,7 +51,7 @@ for (let f = 0; f < 3; f++) {
   click('resume'); step();
   for (const k of ['brazier', 'idol']) { const o = t.fl.obj.find(x => x.k === k); t.P.x = o.x; t.P.y = o.y + 10; t.P.st = 'idle'; t.press.use = true; step(); }
   assert(t.fl.obj.find(x => x.k === 'brazier').lit && t.fl.obj.find(x => x.k === 'idol').used, `floor ${f + 1}: brazier and idol work`);
-  t.P.hp = 40; t.P.st = 'idle'; t.press.heal = true; step(80); assert(t.P.hp > 40, `floor ${f + 1}: flask heals`);
+  t.fl.en.length = 0; t.fl.bolts.length = 0; t.fl.haz.length = 0; t.P.hp = 40; t.P.st = 'idle'; t.press.heal = true; step(80); assert(t.P.hp > 40, `floor ${f + 1}: flask heals`);
   const s = t.fl.obj.find(o => o.k === 'stairs'); t.P.x = s.x; t.P.y = s.y; t.P.st = 'idle'; t.press.use = true; step();
   assert(t.state === 'modal', `floor ${f + 1}: stairs offer relics`);
   const id = els['#ov'].innerHTML.match(/data-id="(\w+)"/)[1]; click('relic', id); step(2);
